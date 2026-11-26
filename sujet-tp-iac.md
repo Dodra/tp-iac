@@ -310,7 +310,7 @@ La page HTML personnalisée doit apparaître. La commande `docker ps` doit montr
 
 Le montage de type bind permet de partager le dossier local avec le conteneur. Une modification du fichier HTML local est donc normalement visible sans reconstruire l'image.
 
-**Question :** quelle est la différence entre un montage bind et la copie d'un fichier dans une image Docker ?
+**Question :** quelle est la différence entre un montage bind et la copie d'un fichier dans une image Docker ? Avec un montage bind, le dossier local est partagé directement avec le conteneur, donc une modification est visible tout de suite. Avec une copie dans l'image, le fichier est figé au moment du build et il faut reconstruire l'image pour le changer.
 
 ## 10. Créer un réseau Docker dédié
 
@@ -326,9 +326,9 @@ Si vous avez modifié `container_name`, adaptez le nom du réseau en conséquenc
 
 **Travail demandé :**
 
-- expliquez pourquoi le conteneur est connecté à ce réseau ;
-- indiquez l'intérêt de déclarer le réseau dans Terraform ;
-- vérifiez que le réseau est supprimé lors de la destruction du projet.
+- expliquez pourquoi le conteneur est connecté à ce réseau ; Pour isoler le conteneur dans un réseau dédié et lui permettre de communiquer avec d'autres conteneurs du même réseau sans le mélanger avec le reste.
+- indiquez l'intérêt de déclarer le réseau dans Terraform ; Le réseau est décrit dans le code, donc il est créé, versionné et supprimé automatiquement avec le reste de l'infrastructure.
+- vérifiez que le réseau est supprimé lors de la destruction du projet. Après `terraform destroy`, `docker network ls` ne montre plus le réseau.
 
 ## 11. Limiter l'exposition du service
 
@@ -348,7 +348,7 @@ terraform apply
 curl http://127.0.0.1:8080
 ```
 
-**Question :** quelle est la différence entre `127.0.0.1` et une écoute sur toutes les interfaces ?
+**Question :** quelle est la différence entre `127.0.0.1` et une écoute sur toutes les interfaces ? `127.0.0.1` rend le service accessible uniquement depuis la machine locale, alors qu'une écoute sur toutes les interfaces le rend accessible aussi depuis les autres machines du réseau.
 
 ## 12. Paramétrer les environnements avec des variables
 
@@ -388,10 +388,10 @@ Le fichier `terraform.tfstate` permet à Terraform de relier les ressources déc
 
 **Questions :**
 
-1. Quelles ressources apparaissent dans `terraform state list` ?
-2. Quelles informations affiche `terraform state show` ?
-3. Pourquoi l'état Terraform doit-il être protégé ?
-4. Pourquoi faut-il éviter de publier cet état dans un dépôt public ?
+1. Quelles ressources apparaissent dans `terraform state list` ? `docker_image.nginx`, `docker_network.app_network` et `docker_container.web`.
+2. Quelles informations affiche `terraform state show` ? Les informations de la ressource enregistrées dans l'état, comme son nom, son id, l'image, les ports et le réseau.
+3. Pourquoi l'état Terraform doit-il être protégé ? Parce qu'il contient des informations sur l'infrastructure, parfois sensibles, et que Terraform en a besoin pour savoir ce qu'il gère. S'il est perdu ou modifié, Terraform peut recréer ou dupliquer des ressources.
+4. Pourquoi faut-il éviter de publier cet état dans un dépôt public ? Parce qu'il peut contenir des données sensibles en clair, qui seraient visibles par tout le monde.
 
 ## 14. Observer une dérive de configuration
 
@@ -442,7 +442,7 @@ git add main.tf
 git commit -m "Ajout du réseau Docker"
 ```
 
-**Travail demandé :** expliquez comment l'historique Git facilite la revue, la collaboration et le retour sur une modification.
+**Travail demandé :** expliquez comment l'historique Git facilite la revue, la collaboration et le retour sur une modification. Chaque modification est enregistrée dans un commit avec son auteur et son message. On peut relire ce qui a changé, travailler à plusieurs avec des branches et revenir à une version précédente en cas de problème.
 
 ## 16. Automatiser avec un Makefile
 
@@ -551,7 +551,7 @@ Réalisez les exercices suivants sans consulter immédiatement une correction.
 
 - Remplacez le nom du conteneur par `tp-iac-web`.
 - Exécutez `terraform fmt`, `terraform validate` et `terraform plan`.
-- Expliquez les changements prévus.
+- Expliquez les changements prévus. Le nom du conteneur change et celui du réseau aussi, car il est construit à partir du nom du conteneur. Terraform prévoit donc de détruire puis recréer le conteneur et le réseau.
 
 ### Exercice 2 — Modifier le port
 
@@ -568,14 +568,14 @@ Réalisez les exercices suivants sans consulter immédiatement une correction.
 ### Exercice 4 — Comprendre l'état
 
 - Listez les ressources Terraform.
-- Identifiez les dépendances entre l'image, le réseau et le conteneur.
-- Expliquez pourquoi le conteneur dépend de l'image et du réseau.
+- Identifiez les dépendances entre l'image, le réseau et le conteneur. Le conteneur dépend de l'image et du réseau, car il les référence dans sa configuration.
+- Expliquez pourquoi le conteneur dépend de l'image et du réseau. Parce qu'il faut que l'image et le réseau existent avant de créer le conteneur. Terraform les crée donc en premier et les détruit en dernier.
 
 ### Exercice 5 — Détecter une dérive
 
 - Arrêtez le conteneur depuis Docker.
 - Lancez `terraform plan`.
-- Notez le comportement observé.
+- Notez le comportement observé. Terraform détecte que le conteneur n'est plus en marche alors que la configuration le demande, et le plan propose de le recréer. Un `terraform apply` remet l'infrastructure en place.
 - Restaurez l'infrastructure.
 
 ### Exercice 6 — CI/CD
@@ -590,20 +590,20 @@ Réalisez les exercices suivants sans consulter immédiatement une correction.
 - Exécutez `terraform plan -destroy`.
 - Détruisez les ressources.
 - Vérifiez l'absence du conteneur et du réseau.
-- Expliquez pourquoi il ne faut pas supprimer manuellement l'état Terraform pour nettoyer une infrastructure active.
+- Expliquez pourquoi il ne faut pas supprimer manuellement l'état Terraform pour nettoyer une infrastructure active. Parce que Terraform ne saurait plus quelles ressources il gère. Le conteneur et le réseau resteraient en place et un nouvel apply provoquerait des conflits. Il faut utiliser `terraform destroy`.
 
 ## 20. Questions de compréhension
 
-1. Quelle est la différence entre `terraform init`, `terraform plan` et `terraform apply` ?
-2. Quel est le rôle d'un provider Terraform ?
-3. À quoi sert le fichier `terraform.tfstate` ?
-4. Pourquoi utilise-t-on des variables et des outputs ?
-5. Qu'est-ce qu'une dérive de configuration ?
-6. Quelle différence existe-t-il entre Infrastructure as Code et configuration manuelle ?
-7. Quel est l'intérêt de Git dans un projet IaC ?
-8. Quelle est la différence entre un contrôle CI et un déploiement CD ?
-9. Pourquoi faut-il examiner le plan avant d'appliquer une modification ?
-10. Quelles précautions faut-il prendre avec les fichiers d'état et les secrets ?
+1. Quelle est la différence entre `terraform init`, `terraform plan` et `terraform apply` ? `init` prépare le projet et télécharge les providers, `plan` montre ce qui va être créé, modifié ou supprimé sans rien changer et `apply` exécute les changements.
+2. Quel est le rôle d'un provider Terraform ? Un provider permet à Terraform de communiquer avec une plateforme comme Docker ou AWS.
+3. À quoi sert le fichier `terraform.tfstate` ? Il enregistre les ressources gérées par Terraform et fait le lien entre le code et ce qui existe réellement.
+4. Pourquoi utilise-t-on des variables et des outputs ? Les variables permettent de changer les paramètres sans réécrire les ressources, et les outputs affichent des informations utiles après le déploiement comme l'URL.
+5. Qu'est-ce qu'une dérive de configuration ? C'est une différence entre la configuration attendue et la réalité de l'infrastructure, par exemple un conteneur arrêté à la main.
+6. Quelle différence existe-t-il entre Infrastructure as Code et configuration manuelle ? Avec l'IaC l'infrastructure est décrite dans des fichiers, donc elle est reproductible, versionnée et automatisée. En manuel, il y a plus de risques d'erreurs et c'est difficile à reproduire.
+7. Quel est l'intérêt de Git dans un projet IaC ? Git garde l'historique des modifications, facilite la relecture et le travail à plusieurs, et permet de revenir en arrière.
+8. Quelle est la différence entre un contrôle CI et un déploiement CD ? Le contrôle CI vérifie automatiquement le code à chaque push, alors que le CD déploie automatiquement une fois les contrôles réussis.
+9. Pourquoi faut-il examiner le plan avant d'appliquer une modification ? Pour voir ce qui va être créé, modifié ou détruit et éviter de supprimer ou remplacer une ressource par erreur.
+10. Quelles précautions faut-il prendre avec les fichiers d'état et les secrets ? Il ne faut pas publier le fichier d'état ni les fichiers de variables, ne pas mettre de secrets en clair dans le code et protéger l'accès à l'état.
 
 ## 22. Dépannage
 
